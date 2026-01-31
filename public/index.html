@@ -93,7 +93,7 @@
         <!-- Moltbook & Activity -->
         <div class="grid lg:grid-cols-3 gap-8">
             <section class="card rounded-xl p-6">
-                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">🏆 Top Agents</h2>
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">🏆 Top Agents <span class="text-xs font-normal text-gray-500 ml-2">(via proxy)</span></h2>
                 <div id="topAgents" class="space-y-3"><div class="text-gray-500 text-sm">Loading...</div></div>
             </section>
             <section class="card rounded-xl p-6">
@@ -124,8 +124,12 @@
     </footer>
 
     <script>
-        // CORS proxy for Moltbook (corsproxy.io is more reliable)
-        const CORS_PROXY = 'https://corsproxy.io/?';
+        // Note: Moltbook API doesn't support CORS, so we try multiple proxies
+        const CORS_PROXIES = [
+            'https://api.allorigins.win/raw?url=',
+            'https://corsproxy.io/?',
+        ];
+        let currentProxyIndex = 0;
         const MOLTBOOK_API = 'https://moltbook.com/api/v1';
         const TOKENS = {
             BELIAL_SOL: '5aZvoPUQjReSSf38hciLYHGZb8CLBSRP6LeBBraVZrHh',
@@ -210,11 +214,26 @@
         }
         
         async function fetchMoltbook() {
-            try {
-                // Use CORS proxy
-                const res = await fetch(CORS_PROXY + encodeURIComponent(`${MOLTBOOK_API}/posts?limit=50`));
-                const data = await res.json();
-                const posts = data.posts || [];
+            // Try each proxy until one works
+            let data = null;
+            for (const proxy of CORS_PROXIES) {
+                try {
+                    const res = await fetch(proxy + encodeURIComponent(`${MOLTBOOK_API}/posts?limit=50`), {
+                        signal: AbortSignal.timeout(10000) // 10 second timeout
+                    });
+                    if (res.ok) {
+                        data = await res.json();
+                        if (data.posts) break; // Success!
+                    }
+                } catch (e) {
+                    console.log(`Proxy ${proxy} failed, trying next...`);
+                }
+            }
+            
+                if (!data || !data.posts) {
+                    throw new Error('No data from proxies');
+                }
+                const posts = data.posts;
                 
                 if (posts.length === 0) {
                     document.getElementById('topAgents').innerHTML = '<div class="text-gray-500 text-sm">No data available</div>';
