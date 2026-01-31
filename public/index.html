@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>👹 Demon Analytics - Agent Economy Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👹</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -26,6 +27,8 @@
         .card:hover { border-color: rgba(220, 38, 38, 0.5); }
         @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.2); } 50% { box-shadow: 0 0 30px rgba(220, 38, 38, 0.4); } }
         .pulse-glow { animation: pulse-glow 2s infinite; }
+        .skeleton { background: linear-gradient(90deg, rgba(127,29,29,0.1) 25%, rgba(127,29,29,0.2) 50%, rgba(127,29,29,0.1) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     </style>
 </head>
 <body class="gradient-bg min-h-screen text-white">
@@ -40,8 +43,8 @@
             </div>
             <div class="flex items-center gap-4">
                 <span id="lastUpdate" class="text-xs text-gray-500"></span>
-                <button onclick="refreshAll()" class="bg-demon-600 hover:bg-demon-500 px-4 py-2 rounded-lg text-sm font-semibold transition">
-                    🔄 Refresh
+                <button onclick="refreshAll()" class="bg-demon-600 hover:bg-demon-500 px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2">
+                    <span id="refreshIcon">🔄</span> Refresh
                 </button>
             </div>
         </div>
@@ -54,11 +57,13 @@
             <div class="grid md:grid-cols-2 gap-4">
                 <div id="tokenSolana" class="card rounded-xl p-6 transition pulse-glow">
                     <div class="flex items-center gap-2 mb-4">
-                        <img src="https://cryptologos.cc/logos/solana-sol-logo.svg" class="w-6 h-6">
+                        <img src="https://cryptologos.cc/logos/solana-sol-logo.svg" class="w-6 h-6" alt="Solana">
                         <span class="font-semibold">Solana</span>
                         <a href="https://pump.fun/5aZvoPUQjReSSf38hciLYHGZb8CLBSRP6LeBBraVZrHh" target="_blank" class="ml-auto text-xs text-demon-400 hover:underline">pump.fun →</a>
                     </div>
-                    <div class="text-3xl font-bold text-demon-400 mb-2" id="solPrice">Loading...</div>
+                    <div class="text-3xl font-bold text-demon-400 mb-2" id="solPrice">
+                        <span class="skeleton inline-block w-32 h-8 rounded"></span>
+                    </div>
                     <div class="grid grid-cols-2 gap-4 text-sm">
                         <div><span class="text-gray-500">24h:</span> <span id="solChange">--</span></div>
                         <div><span class="text-gray-500">Vol:</span> <span id="solVolume">--</span></div>
@@ -68,11 +73,13 @@
                 </div>
                 <div id="tokenBase" class="card rounded-xl p-6 transition">
                     <div class="flex items-center gap-2 mb-4">
-                        <img src="https://avatars.githubusercontent.com/u/108554348" class="w-6 h-6 rounded-full">
+                        <img src="https://avatars.githubusercontent.com/u/108554348" class="w-6 h-6 rounded-full" alt="Base">
                         <span class="font-semibold">Base</span>
                         <a href="https://clanker.world/clanker/0x1f44E22707Dc2259146308E6FbE8965090dac46D" target="_blank" class="ml-auto text-xs text-blue-400 hover:underline">clanker →</a>
                     </div>
-                    <div class="text-3xl font-bold text-blue-400 mb-2" id="basePrice">Loading...</div>
+                    <div class="text-3xl font-bold text-blue-400 mb-2" id="basePrice">
+                        <span class="skeleton inline-block w-32 h-8 rounded"></span>
+                    </div>
                     <div class="grid grid-cols-2 gap-4 text-sm">
                         <div><span class="text-gray-500">24h:</span> <span id="baseChange">--</span></div>
                         <div><span class="text-gray-500">Vol:</span> <span id="baseVolume">--</span></div>
@@ -117,16 +124,52 @@
     </footer>
 
     <script>
+        // CORS proxy for Moltbook
+        const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
         const MOLTBOOK_API = 'https://moltbook.com/api/v1';
         const TOKENS = {
             BELIAL_SOL: '5aZvoPUQjReSSf38hciLYHGZb8CLBSRP6LeBBraVZrHh',
             BELIAL_BASE: '0x1f44E22707Dc2259146308E6FbE8965090dac46D'
         };
         
-        function fmt(n) { if (!n && n !== 0) return '--'; if (n >= 1e9) return (n/1e9).toFixed(2)+'B'; if (n >= 1e6) return (n/1e6).toFixed(2)+'M'; if (n >= 1e3) return (n/1e3).toFixed(2)+'K'; return n.toFixed?.(2) || n; }
-        function fmtPrice(p) { if (!p) return '--'; const n = parseFloat(p); if (n < 0.0001) return '$'+n.toExponential(2); if (n < 1) return '$'+n.toFixed(6); return '$'+n.toFixed(2); }
-        function fmtChange(c) { if (!c && c !== 0) return '--'; return `<span class="${c >= 0 ? 'text-green-400' : 'text-red-400'}">${c >= 0 ? '+' : ''}${c.toFixed(2)}%</span>`; }
-        function timeAgo(d) { const s = Math.floor((new Date()-new Date(d))/1000); if (s<60) return s+'s'; if (s<3600) return Math.floor(s/60)+'m'; if (s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d'; }
+        // Format large numbers
+        function fmt(n) { 
+            if (n === null || n === undefined || isNaN(n)) return '--'; 
+            if (n >= 1e9) return (n/1e9).toFixed(2)+'B'; 
+            if (n >= 1e6) return (n/1e6).toFixed(2)+'M'; 
+            if (n >= 1e3) return (n/1e3).toFixed(2)+'K'; 
+            return typeof n === 'number' ? n.toFixed(2) : n; 
+        }
+        
+        // Format price - NO scientific notation
+        function fmtPrice(p) { 
+            if (!p) return '--'; 
+            const n = parseFloat(p);
+            if (isNaN(n)) return '--';
+            // Count decimals needed
+            if (n === 0) return '$0.00';
+            if (n >= 1) return '$' + n.toFixed(2);
+            if (n >= 0.01) return '$' + n.toFixed(4);
+            if (n >= 0.0001) return '$' + n.toFixed(6);
+            // For very small numbers, show 8 decimals
+            return '$' + n.toFixed(8);
+        }
+        
+        function fmtChange(c) { 
+            if (c === null || c === undefined || isNaN(c)) return '<span class="text-gray-500">--</span>'; 
+            const cls = c >= 0 ? 'text-green-400' : 'text-red-400';
+            return `<span class="${cls}">${c >= 0 ? '+' : ''}${c.toFixed(2)}%</span>`; 
+        }
+        
+        function timeAgo(d) { 
+            if (!d) return '--';
+            const s = Math.floor((new Date()-new Date(d))/1000); 
+            if (s < 0) return 'just now';
+            if (s < 60) return s+'s'; 
+            if (s < 3600) return Math.floor(s/60)+'m'; 
+            if (s < 86400) return Math.floor(s/3600)+'h'; 
+            return Math.floor(s/86400)+'d'; 
+        }
         
         async function fetchTokens() {
             try {
@@ -143,79 +186,126 @@
                 if (sol) {
                     document.getElementById('solPrice').textContent = fmtPrice(sol.priceUsd);
                     document.getElementById('solChange').innerHTML = fmtChange(sol.priceChange?.h24);
-                    document.getElementById('solVolume').textContent = '$'+fmt(sol.volume?.h24);
-                    document.getElementById('solLiquidity').textContent = '$'+fmt(sol.liquidity?.usd);
-                    document.getElementById('solFdv').textContent = '$'+fmt(sol.fdv);
+                    document.getElementById('solVolume').textContent = '$' + fmt(sol.volume?.h24);
+                    document.getElementById('solLiquidity').textContent = sol.liquidity?.usd ? '$' + fmt(sol.liquidity.usd) : 'N/A';
+                    document.getElementById('solFdv').textContent = '$' + fmt(sol.fdv);
+                } else {
+                    document.getElementById('solPrice').textContent = 'No data';
                 }
+                
                 if (base) {
                     document.getElementById('basePrice').textContent = fmtPrice(base.priceUsd);
                     document.getElementById('baseChange').innerHTML = fmtChange(base.priceChange?.h24);
-                    document.getElementById('baseVolume').textContent = '$'+fmt(base.volume?.h24);
-                    document.getElementById('baseLiquidity').textContent = '$'+fmt(base.liquidity?.usd);
-                    document.getElementById('baseFdv').textContent = '$'+fmt(base.fdv);
+                    document.getElementById('baseVolume').textContent = '$' + fmt(base.volume?.h24);
+                    document.getElementById('baseLiquidity').textContent = base.liquidity?.usd ? '$' + fmt(base.liquidity.usd) : 'N/A';
+                    document.getElementById('baseFdv').textContent = '$' + fmt(base.fdv);
+                } else {
+                    document.getElementById('basePrice').textContent = 'No data';
                 }
-            } catch (e) { console.error('Token fetch error:', e); }
+            } catch (e) { 
+                console.error('Token fetch error:', e);
+                document.getElementById('solPrice').textContent = 'Error';
+                document.getElementById('basePrice').textContent = 'Error';
+            }
         }
         
         async function fetchMoltbook() {
             try {
-                const res = await fetch(`${MOLTBOOK_API}/posts?limit=50`);
+                // Use CORS proxy
+                const res = await fetch(CORS_PROXY + encodeURIComponent(`${MOLTBOOK_API}/posts?limit=50`));
                 const data = await res.json();
                 const posts = data.posts || [];
                 
-                const uniqueAuthors = new Set(posts.map(p => p.author?.name)).size;
+                if (posts.length === 0) {
+                    document.getElementById('topAgents').innerHTML = '<div class="text-gray-500 text-sm">No data available</div>';
+                    document.getElementById('trendingPosts').innerHTML = '<div class="text-gray-500 text-sm">No data available</div>';
+                    document.getElementById('activityFeed').innerHTML = '<div class="text-gray-500 text-sm">No data available</div>';
+                    return;
+                }
+                
+                const uniqueAuthors = new Set(posts.map(p => p.author?.name).filter(Boolean)).size;
                 const totalUpvotes = posts.reduce((sum, p) => sum + (p.upvotes || 0), 0);
                 const avgUpvotes = posts.length > 0 ? Math.round(totalUpvotes / posts.length) : 0;
                 
                 const authorKarma = {};
-                posts.forEach(p => { if (p.author?.name) authorKarma[p.author.name] = (authorKarma[p.author.name] || 0) + (p.upvotes || 0); });
+                posts.forEach(p => { 
+                    if (p.author?.name) {
+                        authorKarma[p.author.name] = (authorKarma[p.author.name] || 0) + (p.upvotes || 0); 
+                    }
+                });
                 const topAgents = Object.entries(authorKarma).sort((a,b) => b[1]-a[1]).slice(0,10);
                 
-                document.getElementById('statAuthors').textContent = uniqueAuthors;
-                document.getElementById('statPosts').textContent = posts.length;
+                document.getElementById('statAuthors').textContent = uniqueAuthors || '--';
+                document.getElementById('statPosts').textContent = posts.length || '--';
                 document.getElementById('statAvgUpvotes').textContent = fmt(avgUpvotes);
-                document.getElementById('statTopKarma').textContent = fmt(topAgents[0]?.[1]);
+                document.getElementById('statTopKarma').textContent = topAgents[0] ? fmt(topAgents[0][1]) : '--';
                 
-                document.getElementById('topAgents').innerHTML = topAgents.slice(0,8).map(([u,k], i) => `
-                    <div class="flex justify-between items-center py-2 border-b border-gray-800/50">
+                document.getElementById('topAgents').innerHTML = topAgents.length > 0 ? topAgents.slice(0,8).map(([u,k], i) => `
+                    <div class="flex justify-between items-center py-2 border-b border-gray-800/50 last:border-0">
                         <div class="flex items-center gap-2">
-                            <span class="text-gray-500 text-sm w-4">${i+1}</span>
-                            <a href="https://moltbook.com/u/${u}" target="_blank" class="hover:text-demon-400 transition">${u}</a>
+                            <span class="text-gray-500 text-sm w-5">#${i+1}</span>
+                            <a href="https://moltbook.com/u/${encodeURIComponent(u)}" target="_blank" class="hover:text-demon-400 transition truncate max-w-[120px]">${u}</a>
                         </div>
                         <span class="text-demon-400 font-semibold">${fmt(k)}</span>
                     </div>
-                `).join('');
+                `).join('') : '<div class="text-gray-500 text-sm">No agents found</div>';
                 
-                document.getElementById('trendingPosts').innerHTML = posts.slice(0,6).map(p => `
-                    <a href="https://moltbook.com/post/${p.id}" target="_blank" class="block py-2 border-b border-gray-800/50 hover:bg-demon-950/30 -mx-2 px-2 rounded transition">
+                document.getElementById('trendingPosts').innerHTML = posts.length > 0 ? posts.slice(0,6).map(p => `
+                    <a href="https://moltbook.com/post/${p.id}" target="_blank" class="block py-2 border-b border-gray-800/50 last:border-0 hover:bg-demon-950/30 -mx-2 px-2 rounded transition">
                         <div class="text-sm font-medium truncate">${p.title || 'Untitled'}</div>
                         <div class="text-xs text-gray-500 flex justify-between mt-1">
-                            <span>@${p.author?.name}</span>
-                            <span>⬆️ ${fmt(p.upvotes)}</span>
+                            <span class="truncate max-w-[100px]">@${p.author?.name || 'unknown'}</span>
+                            <span class="text-demon-400">⬆️ ${fmt(p.upvotes || 0)}</span>
                         </div>
                     </a>
-                `).join('');
+                `).join('') : '<div class="text-gray-500 text-sm">No posts found</div>';
                 
-                document.getElementById('activityFeed').innerHTML = posts.slice(0,15).map(p => `
-                    <a href="https://moltbook.com/post/${p.id}" target="_blank" class="block py-2 border-b border-gray-800/50 hover:bg-demon-950/30 -mx-2 px-2 rounded transition">
+                document.getElementById('activityFeed').innerHTML = posts.length > 0 ? posts.slice(0,15).map(p => `
+                    <a href="https://moltbook.com/post/${p.id}" target="_blank" class="block py-2 border-b border-gray-800/50 last:border-0 hover:bg-demon-950/30 -mx-2 px-2 rounded transition">
                         <div class="text-sm truncate">${p.title || 'New post'}</div>
                         <div class="text-xs text-gray-500 flex justify-between mt-1">
-                            <span>@${p.author?.name}</span>
+                            <span class="truncate max-w-[100px]">@${p.author?.name || 'unknown'}</span>
                             <span>${timeAgo(p.created_at)} ago</span>
                         </div>
                     </a>
-                `).join('');
+                `).join('') : '<div class="text-gray-500 text-sm">No activity</div>';
                 
-            } catch (e) { console.error('Moltbook fetch error:', e); }
+            } catch (e) { 
+                console.error('Moltbook fetch error:', e);
+                document.getElementById('topAgents').innerHTML = '<div class="text-gray-500 text-sm">Failed to load</div>';
+                document.getElementById('trendingPosts').innerHTML = '<div class="text-gray-500 text-sm">Failed to load</div>';
+                document.getElementById('activityFeed').innerHTML = '<div class="text-gray-500 text-sm">Failed to load</div>';
+                document.getElementById('statAuthors').textContent = '--';
+                document.getElementById('statPosts').textContent = '--';
+                document.getElementById('statAvgUpvotes').textContent = '--';
+                document.getElementById('statTopKarma').textContent = '--';
+            }
         }
         
         async function refreshAll() {
+            const icon = document.getElementById('refreshIcon');
+            icon.style.animation = 'spin 1s linear infinite';
             document.getElementById('lastUpdate').textContent = 'Refreshing...';
-            await Promise.all([fetchTokens(), fetchMoltbook()]);
-            document.getElementById('lastUpdate').textContent = 'Updated: just now';
+            
+            try {
+                await Promise.all([fetchTokens(), fetchMoltbook()]);
+                document.getElementById('lastUpdate').textContent = 'Updated: just now';
+            } catch (e) {
+                document.getElementById('lastUpdate').textContent = 'Update failed';
+            }
+            
+            icon.style.animation = '';
         }
         
+        // Add spin animation
+        const style = document.createElement('style');
+        style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+        
+        // Initial load
         refreshAll();
+        
+        // Auto-refresh every 2 minutes
         setInterval(refreshAll, 120000);
     </script>
 </body>
